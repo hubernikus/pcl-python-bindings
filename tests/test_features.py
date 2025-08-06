@@ -1,10 +1,13 @@
 # for pytest
 from pcl.common import PointcloudXYZNormal, PointXYZNormal, PointCloud
 from pcl.common import PointType as t
-from pcl.features import NormalEstimationXYZNormal, NormalEstimation
+from pcl.features import NormalEstimation
+
 from math import isnan
 
 import numpy as np
+
+NormalEstimationXYZNormal = NormalEstimation
 
 
 def test_normalestimation():
@@ -27,7 +30,7 @@ def test_normalestimation():
 
 
 def test_normal_estimation_general():
-    cloud_normals = PointCloud(t.PointNormal)
+    cloud_normals = PointCloud(t.PointXYZ)
     num = 15
     cloud_normals["position"] = np.vstack(
         (np.arange(num), np.arange(num), np.zeros(num))

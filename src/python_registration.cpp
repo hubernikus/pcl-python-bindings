@@ -12,81 +12,49 @@
 namespace nb = nanobind;
 using namespace nb::literals;
 
-class IterativeClosestPoint{
-  public:
-    double inlier_threshold; // = 0.05
-    unsigned int max_iterations; // = 10
-    unsigned int ransac_iterations; // = 0 
-    double euclidean_fitness_epsilon_ = std::numeric_limits<double>::max();
-    // TODO: more settings / tweaking of algorithm
-    // unsigned int min_number_correspondences; // = 3 ? -> no setter in class
-    // setTransformationEpsilon
-    // setMaxCorrespondenceDistance (0.05);
-
-    // Result
-    bool converged_ = false;
-    Eigen::Matrix4f final_transformation_ = Eigen::Matrix4f::Identity();
-
-    IterativeClosestPoint(
-      double inlier_threshold, 
-      unsigned int max_iterations,
-      unsigned int ransac_iterations
-    ): 
-        inlier_threshold(inlier_threshold), 
-        max_iterations(max_iterations), 
-        ransac_iterations(ransac_iterations) {}
-};
-
-template<typename PointT, typename PointS> 
-pcl::IterativeClosestPoint<PointT, PointS, float> 
-create_icp(PointT&, PointS){
-  // All pcl-types seem to be points
-  return pcl::IterativeClosestPoint<PointT, PointS, float>();
-};
-
-
-template<typename CloudT, typename CloudS> requires (!HasPosition<CloudT> || !HasPosition<CloudS>)
-void align(CloudT& source,  CloudS& target, IterativeClosestPoint& parameters){
-std::cout << "Does not have position.\n"; throw 101;};
-template<typename CloudT, typename CloudS> requires (HasPosition<CloudT> && HasPosition<CloudS>)
-void align(CloudT& source,  CloudS& target, IterativeClosestPoint& parameters){
-  auto icp = create_icp(source->front(), target->front());
-
-  icp.setRANSACOutlierRejectionThreshold(parameters.inlier_threshold);
-  icp.setMaximumIterations(parameters.max_iterations);
-  icp.setRANSACIterations(parameters.ransac_iterations);
-
-  icp.setInputSource(source);
-  icp.setInputTarget(target);
-
-  auto cloud_source_aligned = make_shared_of_type(*source);
-  icp.align(*cloud_source_aligned);
-
-  parameters.converged_ = icp.hasConverged();
-  if (!parameters.converged_) return;
-
-  parameters.euclidean_fitness_epsilon_ = icp.getEuclideanFitnessEpsilon();
-  parameters.final_transformation_ = icp.getFinalTransformation(); 
-};
+using IterativeClosestPoint = pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ, double>;
 
 NB_MODULE(pcl_registration_ext, m)
 {
   nb::class_<IterativeClosestPoint>(m, "IterativeClosestPoint")
-  .def(nb::init<double, unsigned int, unsigned int>(),
-    "inlier_threshold"_a = 0.05, "max_iterations"_a  = 10, "ransac_iterations"_a = 0)
-  .def_rw("inlier_threshold", &IterativeClosestPoint::inlier_threshold)
-  .def_rw("max_iterations", &IterativeClosestPoint::max_iterations)
-  .def_rw("ransac_iterations", &IterativeClosestPoint::ransac_iterations)
-  .def_ro("euclidean_fitness_epsilon_", &IterativeClosestPoint::euclidean_fitness_epsilon_)
-  .def_ro("converged_", &IterativeClosestPoint::converged_, 
+  .def("__init__", [](
+    IterativeClosestPoint* icp, 
+    int max_iterations, 
+    float ransac_iterations
+    // float max_correspondance_distance
+    ) { 
+      new (icp) IterativeClosestPoint(); 
+      icp->setMaximumIterations(max_iterations);
+      icp->setRANSACOutlierRejectionThreshold(ransac_iterations);
+      // icp->setMaxCorrespondenceDistance(max_correspondance_distance);
+    }, 
+    "max_iterations"_a  = 10, 
+    "ransac_iterations"_a = 0
+    // "max_correspondance_distance"_a=0.05
+  )
+  // TODO remaining parameters
+  // .def_prop_rw("max_correspondance_distance", &IterativeClosestPoint::setMaxCorrespondenceDistance, &IterativeClosestPoint::getMaxCorrespondenceDistance)
+  .def_prop_rw("max_iterations", &IterativeClosestPoint::setMaximumIterations, &IterativeClosestPoint::getMaximumIterations)
+  .def_prop_rw("ransac_iterations", &IterativeClosestPoint::setRANSACOutlierRejectionThreshold, &IterativeClosestPoint::getRANSACOutlierRejectionThreshold)
+  // .def_prop_ro("euclidean_fitness_epsilon", &IterativeClosestPoint::)
+  .def_prop_ro("converged", &IterativeClosestPoint::hasConverged, 
     "Return the state of convergence after the last align run.")
-  .def_ro("final_transformation_", &IterativeClosestPoint::final_transformation_, 
+  .def_prop_ro("final_transformation", &IterativeClosestPoint::getFinalTransformation, 
     "Get the final transformation matrix estimated by the registration method.")
   .def("align", [](IterativeClosestPoint& icp, PointCloud& source, PointCloud& target){
-    std::visit([&icp](auto& source_, auto& target_){
-      align(source_, target_, icp);
-    }, source.data, target.data);
-  }, "source"_a, "target"_a,
+    auto pcl_source = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    source.position_to_cloud(*pcl_source);
+    icp.setInputSource(pcl_source);
+
+    auto pcl_target = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    target.position_to_cloud(*pcl_target);
+    icp.setInputTarget(pcl_target);
+
+    auto pcl_output = pcl::PointCloud<pcl::PointXYZ>();
+    icp.align(pcl_output);
+  }, 
+  "source"_a, 
+  "target"_a,
   "Call the registration algorithm which estimates the transformation and returns the transformed source (input) as output.") 
   ;
 

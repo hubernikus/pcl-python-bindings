@@ -1,14 +1,11 @@
-#include <concepts>
+#include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
-#include <utility>
-#include <variant>
+#include <vector>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
-
-#include <pcl/point_types.h> 
-#include <pcl/point_cloud.h>
 
 namespace nb = nanobind;
 
@@ -22,29 +19,11 @@ inline nb::capsule delete_owner(T data){
   return owner;
 };
 
-template<typename T>
-pcl::shared_ptr<T> make_shared_of_type(const T&){
-  return std::make_shared<T>();
+NumpyArray2d create_2d_array(size_t cols, size_t rows){
+  float *data = new float[rows * cols];
+  return NumpyArray2d(data, {rows, cols}, delete_owner(data));
 };
 
-
-using CloudVariant = std::variant<
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZI>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZL>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBA>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGB>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBL>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZLAB>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZHSV>>,
-  std::shared_ptr<pcl::PointCloud<pcl::Normal>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointNormal>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZRGBNormal>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZINormal>>,
-  std::shared_ptr<pcl::PointCloud<pcl::PointXYZLNormal>>
->;
-
-// Make sure enum matches the cloud variant to enable variant.index() / variant.emplace()
 enum PointType{
   PointXYZ,
   PointXYZI,
@@ -59,149 +38,163 @@ enum PointType{
   PointXYZRGBNormal,
   PointXYZINormal,
   PointXYZLNormal,
-  NUMBER_OF_POINTS // The number of enum-points for correct templatization 
+  GENERAL 
+  // NUMBER_OF_POINTS // The number of enum-points for correct templatization
 };
 
-
-// namespace traits {
-  template<typename T>
-  concept HasPosition = requires (T cloud){
-    cloud->front().x;
-    cloud->front().y;
-    cloud->front().z;
-  };
-
-  template<typename T>
-  concept HasNormal = requires (T cloud){
-    cloud->front().normal_x;
-    cloud->front().normal_y;
-    cloud->front().normal_z;
-  };
-
-  template<typename T>
-  concept HasCurvature = requires (T cloud){
-    cloud->front().curvature;
-  };
-
-  template<typename T>
-  concept HasColor = requires (T cloud){
-    cloud->front().r;
-    cloud->front().g;
-    cloud->front().b;
-    cloud->front().a;
-  };
-
-  template<typename T>
-  concept HasHSV = requires (T cloud){
-    cloud->front().h;
-    cloud->front().s;
-    cloud->front().v;
-  };
-
-  template<typename T>
-  concept HasLabel = requires (T cloud){
-    cloud->front().label;
-  };
-
-  template<typename T>
-  concept HasIntensity = requires (T cloud){
-    cloud->front().intensity;
-  };
-
-  template<typename T>
-  concept HasLab = requires (T cloud){
-    cloud->front().L;
-    cloud->front().a;
-    cloud->front().b;
-  };
-
-
-
-// } // namespace traits
-
-
-template<size_t CloudT>
-CloudVariant makeCloudForIndex() {
-  CloudVariant tmp;
-  tmp.emplace<CloudT>();
-  CloudVariant cloud = make_shared_of_type(*std::get<CloudT>(tmp));
-  return cloud;
+std::map<PointType, std::vector<std::string>> CLOUD_KEYS= {
+  // TODO: add remaining points
+  {PointType::PointXYZ, {"position"}},
+  {PointType::PointXYZI, {"position", "intensity"}},
+  {PointType::PointNormal, {"position", "normal", "curvature"}}
 };
 
 class PointCloud
 {
-  template<size_t... Is>
-  CloudVariant makeCloud(size_t nIdx, std::index_sequence<Is...>) {
-    /* In order to work with std::variant-templatization: create all 
-    function-pointers, and call the correct one.  */
-    using FuncType = CloudVariant(*)();
-    constexpr FuncType arFuncs[] = { makeCloudForIndex<Is>... };
-    return arFuncs[nIdx]();
-  }
+  // Map of 2D-array with column first
+  std::map<std::string, NumpyArray2d> _data = {};
+  PointType _type = PointType::GENERAL;
 
   public:
-     CloudVariant data;
-
-    PointCloud(CloudVariant data_): data(data_) {}
-
-    PointCloud(PointType type) {
-      data = makeCloud(static_cast<size_t>(type), std::make_index_sequence<PointType::NUMBER_OF_POINTS>());
+    // TODO: constructor with different PointType's
+    PointCloud() {}
+    PointCloud(PointType type, size_t size = 0): _type(type){
+      std::vector<std::string> keys = CLOUD_KEYS[type];
+      for (auto it = keys.begin(); it != keys.end(); ++it){
+        // TODO: varying width of arrays (?)
+        _data[*it] = create_2d_array(3, size);
+        // _data["position"] = create_2d_array(3, size);
+      }
     }
 
-    size_t size() const {
-      return std::visit([](auto&& arg){return arg->size();}, data);
+    bool size_consistent() const {
+      size_t size = _data.begin()->second.shape(0);
+      for (auto it = _data.begin(); it != _data.end(); ++it){
+        if (it->second.shape(0) != size){
+          return false;
+        }
+      }
+      return true;
     }
-    PointType type() const {return static_cast<PointType>(data.index());}
+
+    void resize(size_t new_size){
+      for (auto it = _data.begin(); it != _data.end(); ++it){
+        size_t size = it->second.shape(0);
+        if (size == new_size) {continue;}
+
+        auto new_array = create_2d_array(size, it->second.shape(1));
+
+        size_t n_row = std::min(size, new_size);
+        for (size_t i = 0; i < n_row; ++i){
+          for (size_t j = 0; j < new_array.shape(1); ++j){
+            new_array(i, j) = it->second(i, j);
+          }
+        }
+        _data[it->first] = new_array;
+      } 
+    }
+
+    size_t get_size() const {
+      if (!this->size_consistent()) {
+        std::cout << "Size of cloud inconsistent\n";
+        throw 101;}
+      return _data.begin()->second.shape(0);
+    }
+
+    std::vector<std::string> get_keys() const {
+      if (_type != PointType::GENERAL){
+        return CLOUD_KEYS[_type];
+      }
+      
+      std::vector<std::string> keys;
+      for (auto it = _data.begin(); it != _data.end(); ++it)
+      {
+          // Add the key to the vector
+          keys.push_back(it->first);
+      }
+      return keys;
+    }
+
+    template<typename CloudT>
+    void position_from_cloud(CloudT& cloud){
+      size_t cols = 3;
+      auto rows = cloud.size(); 
+
+      float* array = new float[rows * cols];
+      for (size_t i = 0; i < rows; ++i){
+        auto value = cloud[i];
+        array[i * cols]  = value.x;
+        array[i * cols + 1]  = value.y;
+        array[i * cols + 2]  = value.z;
+      }
+
+      // TODO: check owner / deletion
+      auto owner = delete_owner(array);
+      auto ndarray = NumpyArray2d(array, {rows, cols}, owner);
+      this->set("position", ndarray);
+    };
+
+    template<typename CloudT>
+    void position_to_cloud(CloudT& cloud){
+      auto ndarray = this->get("position");
+      cloud.resize(ndarray.shape(0));
+
+      for (int ii = 0; ii < ndarray.shape(0); ii++){
+        cloud[ii].x = ndarray(ii, 0);
+        cloud[ii].y = ndarray(ii, 1);
+        cloud[ii].z = ndarray(ii, 2);
+      }
+    };
+
+
+    template<typename CloudT>
+    void normal_from_cloud(CloudT &cloud){
+      size_t cols = 3;
+      auto rows = cloud.size(); 
+    
+      float *_data = new float[rows * cols];
+      for (size_t i = 0; i < rows; ++i){
+        auto value = cloud[i];
+        _data[i * cols]  = value.normal_x;
+        _data[i * cols + 1]  = value.normal_y;
+        _data[i * cols + 2]  = value.normal_z;
+      }
+    
+      auto ndarray = NumpyArray2d(_data, {rows, cols}, delete_owner(_data));
+      this->set("normal", ndarray);
+    };
+
+    template<typename CloudT>
+    void normal_to_cloud(CloudT &cloud){
+      auto ndarray = get("normal");
+      cloud->resize(ndarray.shape(0));
+    
+      for (int ii = 0; ii < ndarray.shape(0); ii++){
+        cloud[ii].normal_x = ndarray(ii, 0);
+        cloud[ii].normal_y = ndarray(ii, 1);
+        cloud[ii].normal_z = ndarray(ii, 2);
+      }
+    };
+
+    // TODO: Add additional setters / getters for remaining features
+
+    NumpyArray2d get(std::string key){
+      // TODO: check ownership (!)
+      // TODO: different arrays needed (?)
+      return _data[key];
+    };
+
+    void set(std::string key, NumpyArray2d value){
+      // TODO: check existence / if it can be created
+      // TODO: check array differences 
+      // https://data-apis.org/array-api/latest/purpose_and_scope.html
+      if (_type == PointType::GENERAL){
+        if (_data.find(key) != _data.end()){
+          std::cout << "Unexpected key: " << key << "\n";
+          throw 101;
+        }
+      }
+      _data[key] = value;
+    };
 };
 
-namespace keys {
-  using KeyList = std::vector<std::string>;
-
-  std::string position = "position";
-  std::string normal = "normal";
-  std::string curvature = "curvature";
-  std::string color = "color";
-  std::string intensity = "intensity";
-  std::string label = "label";
-  std::string hsv = "hsv";
-  std::string lab = "Lab";
-
-  template<typename T> requires (!HasPosition<T>) void add_position(T&, KeyList&) {};
-  template<typename T> requires HasPosition<T> void add_position(T&, KeyList& list){list.push_back(position);}
-
-  template<typename T> requires (!HasNormal<T>) void add_normal(T&, KeyList&) {};
-  template<typename T> requires HasNormal<T> void add_normal(T&, KeyList& list) {list.push_back(normal);}
-
-  template<typename T> requires (!HasCurvature<T>) void add_curvature(T&, KeyList&) {};
-  template<typename T> requires HasCurvature<T> void add_curvature(T&, KeyList& list) {list.push_back(curvature);}
-
-  template<typename T> requires (!HasColor<T>) void add_color(T&, KeyList&) {};
-  template<typename T> requires HasColor<T> void add_color(T&, KeyList& list) {list.push_back(color);}
-
-  template<typename T> requires (!HasIntensity<T>) void add_intensity(T&, KeyList&) {};
-  template<typename T> requires HasIntensity<T> void add_intensity(T&, KeyList& list) {list.push_back(intensity);}
-
-  template<typename T> requires (!HasLabel<T>) void add_label(T&, KeyList&) {};
-  template<typename T> requires HasLabel<T> void add_label(T&, KeyList& list) {list.push_back(label);}
-
-  template<typename T> requires (!HasHSV<T>) void add_hsv(T&, KeyList&) {};
-  template<typename T> requires HasHSV<T> void add_hsv(T&, KeyList& list) {list.push_back(hsv);}
-
-  template<typename T> requires (!HasLab<T>) void add_lab(T&, KeyList&) {};
-  template<typename T> requires HasLab<T> void add_lab(T&, KeyList& list) {list.push_back(lab);}
-
-  KeyList get_keys (const PointCloud& cloud) {
-    return std::visit([](auto&& arg){
-      KeyList keys = {};
-      add_position(arg, keys);
-      add_normal(arg, keys);
-      add_curvature(arg, keys);
-      add_color(arg, keys);
-      add_intensity(arg, keys);
-      add_label(arg, keys);
-      add_hsv(arg, keys);
-      add_lab(arg, keys);
-      return keys;
-    }, cloud.data);
-  }
-}
