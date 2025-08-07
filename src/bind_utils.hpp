@@ -12,6 +12,8 @@ namespace nb = nanobind;
 using NumpyArray2d = nb::ndarray<float, nb::numpy, nb::ndim<2>>;
 using InputArray2d = nb::ndarray<float, nb::ndim<2>>;
 
+// TODO: double check ownership - when setting and when returning
+// TODO: how to handle different datatypes (np / tensorflow?)
 template<typename T>
 inline nb::capsule delete_owner(T data){
   // Delete 'data' when the 'owner' capsule expires
@@ -19,7 +21,7 @@ inline nb::capsule delete_owner(T data){
   return owner;
 };
 
-NumpyArray2d create_2d_array(size_t cols, size_t rows){
+NumpyArray2d create_2d_array(size_t rows, size_t cols){
   float *data = new float[rows * cols];
   return NumpyArray2d(data, {rows, cols}, delete_owner(data));
 };
@@ -57,17 +59,17 @@ class PointCloud
 
   public:
     // TODO: constructor with different PointType's
-    PointCloud() {}
     PointCloud(PointType type, size_t size = 0): _type(type){
       std::vector<std::string> keys = CLOUD_KEYS[type];
       for (auto it = keys.begin(); it != keys.end(); ++it){
         // TODO: varying width of arrays (?)
-        _data[*it] = create_2d_array(3, size);
+        _data[*it] = create_2d_array(size, 3);
         // _data["position"] = create_2d_array(3, size);
       }
     }
 
     bool size_consistent() const {
+      /* Checks if the size of all arrays are consistent. */
       size_t size = _data.begin()->second.shape(0);
       for (auto it = _data.begin(); it != _data.end(); ++it){
         if (it->second.shape(0) != size){
@@ -82,7 +84,7 @@ class PointCloud
         size_t size = it->second.shape(0);
         if (size == new_size) {continue;}
 
-        auto new_array = create_2d_array(size, it->second.shape(1));
+        auto new_array = create_2d_array(new_size, it->second.shape(1));
 
         size_t n_row = std::min(size, new_size);
         for (size_t i = 0; i < n_row; ++i){
@@ -196,5 +198,24 @@ class PointCloud
       }
       _data[key] = value;
     };
+
+    PointCloud slice(nb::slice slice){
+      auto size = this->get_size();
+      const auto& [start, stop, step, new_size] = slice.compute(size);
+
+      auto new_cloud = PointCloud(_type);
+      for (auto it = _data.begin(); it != _data.end(); ++it){
+        auto array = create_2d_array(new_size, it->second.shape(1));
+        size_t row = start;
+        for (auto row_new = 0; row_new < new_size; row_new++){
+          for (auto cc = 0; cc < it->second.shape(1); cc++){
+            array(row_new, cc) = (float) it->second(row, cc);
+          }
+          row += step;
+        }
+        new_cloud.set(it->first, array);
+      }
+      return new_cloud;
+    }
 };
 

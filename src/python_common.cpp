@@ -12,7 +12,7 @@
 #include "bind_utils.hpp"
 
 namespace nb = nanobind;
-
+using namespace nb::literals;
 
 NB_MODULE(pcl_common_ext, m)
 {
@@ -33,16 +33,22 @@ NB_MODULE(pcl_common_ext, m)
   .export_values();
 
   nb::class_<PointCloud>(m, "PointCloud")
-  .def(nb::init<>())
-  .def(nb::init<PointType>())
+  .def(nb::init<PointType, size_t>(), "type"_a, "size"_a = 0)
   .def("__repr__", [](const PointCloud& cloud) {
     return nb::str("PointCloud<{}> of length {} with keys:\n {}").format(
       "", cloud.get_size(), cloud.get_keys());
   })
-  .def("keys", &PointCloud::get_keys)
   .def("__len__", &PointCloud::get_size)
-  .def("__getitem__", &PointCloud::get)
+  .def("__getitem__", &PointCloud::get
+    // nb::rv_policy::reference_internal
+  )
+
+  // What is best for setting / getting array? Different array-types, too?
+  // .def("__getitem__", &PointCloud::slice)
+  .def("__getitem__", &PointCloud::slice)
   .def("__setitem__", &PointCloud::set)
+  .def("keys", &PointCloud::get_keys)
+  .def("resize", &PointCloud::resize)
   ;
 
   nb::class_<pcl::PointXYZ>(m, "PointXYZ")

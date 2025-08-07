@@ -137,5 +137,31 @@ def compare_speed():
         print(f"Cloud-Based took {cloud_time * 1000:0.3f} ms")
 
 
+def test_resize():
+    cloud = PointCloud(t.PointNormal, 0)
+    assert len(cloud) == 0
+
+    cloud = PointCloud(t.PointNormal, 3)
+    assert len(cloud) == 3
+
+    cloud.resize(10)
+    assert len(cloud) == 10
+
+
+def test_slice():
+    cloud = PointCloud(t.PointNormal)
+    n_points = 7
+    cloud["position"] = np.tile(np.arange(n_points), (3, 1)).T
+    cloud["normal"] = np.tile(np.arange(3) * 0.1, (n_points, 1))
+    cloud["curvature"] = np.ones((n_points, 1))
+    assert len(cloud) == n_points
+
+    ss = slice(1, 4, 2)
+    sliced = cloud[ss]
+    assert len(sliced) == 2
+    np.testing.assert_allclose(sliced["normal"], cloud["normal"][ss])
+    np.testing.assert_allclose(sliced["position"], cloud["position"][ss])
+
+
 if __name__ == "__main__":
     compare_speed()
