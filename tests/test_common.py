@@ -162,6 +162,12 @@ def test_slice():
     np.testing.assert_allclose(sliced["normal"], cloud["normal"][ss])
     np.testing.assert_allclose(sliced["position"], cloud["position"][ss])
 
+    index = 3
+    single = cloud[index]
+    assert len(single) == 1
+    np.testing.assert_allclose(single["position"], [cloud["position"][index]])
+    np.testing.assert_allclose(single["normal"], [cloud["normal"][index, :]])
+
 
 if __name__ == "__main__":
     compare_speed()

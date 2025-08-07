@@ -180,7 +180,7 @@ class PointCloud
 
     // TODO: Add additional setters / getters for remaining features
 
-    NumpyArray2d get(std::string key){
+    NumpyArray2d get(std::string key) {
       // TODO: check ownership (!)
       // TODO: different arrays needed (?)
       return _data[key];
@@ -199,7 +199,7 @@ class PointCloud
       _data[key] = value;
     };
 
-    PointCloud slice(nb::slice slice){
+    PointCloud slice(nb::slice slice) const {
       auto size = this->get_size();
       const auto& [start, stop, step, new_size] = slice.compute(size);
 

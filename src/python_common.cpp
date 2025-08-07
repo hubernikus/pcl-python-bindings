@@ -40,12 +40,13 @@ NB_MODULE(pcl_common_ext, m)
   })
   .def("__len__", &PointCloud::get_size)
   .def("__getitem__", &PointCloud::get
-    // nb::rv_policy::reference_internal
   )
-
-  // What is best for setting / getting array? Different array-types, too?
-  // .def("__getitem__", &PointCloud::slice)
+  // What is best naming for setting / getting array? Different array-types, too?
   .def("__getitem__", &PointCloud::slice)
+  .def("__getitem__", [](const PointCloud& cloud, int index){
+    return cloud.slice(nb::slice(index,index+1,1));
+  })
+    // nb::rv_policy::reference_internal
   .def("__setitem__", &PointCloud::set)
   .def("keys", &PointCloud::get_keys)
   .def("resize", &PointCloud::resize)
