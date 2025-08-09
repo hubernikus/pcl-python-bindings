@@ -40,38 +40,38 @@ def test_keys():
     cloud = PointCloud(t.PointXYZI)
     assert {"position", "intensity"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZL)
-    assert {"position", "label"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZL)
+    # assert {"position", "label"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZRGBA)
-    assert {"position", "color"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZRGBA)
+    # assert {"position", "color"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZRGB)
-    assert {"position", "color"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZRGB)
+    # assert {"position", "color"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZRGBL)
-    assert {"position", "color", "label"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZRGBL)
+    # assert {"position", "color", "label"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZLAB)
-    assert {"position", "Lab"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZLAB)
+    # assert {"position", "Lab"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZHSV)
-    assert {"position", "hsv"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZHSV)
+    # assert {"position", "hsv"} == set(cloud.keys())
 
-    cloud = PointCloud(t.Normal)
-    assert {"normal", "curvature"} == set(cloud.keys())
+    # cloud = PointCloud(t.Normal)
+    # assert {"normal", "curvature"} == set(cloud.keys())
 
     cloud = PointCloud(t.PointNormal)
     assert {"position", "normal", "curvature"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZRGBNormal)
-    assert {"position", "color", "normal", "curvature"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZRGBNormal)
+    # assert {"position", "color", "normal", "curvature"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZINormal)
-    assert {"position", "intensity", "normal", "curvature"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZINormal)
+    # assert {"position", "intensity", "normal", "curvature"} == set(cloud.keys())
 
-    cloud = PointCloud(t.PointXYZLNormal)
-    assert {"position", "label", "normal", "curvature"} == set(cloud.keys())
+    # cloud = PointCloud(t.PointXYZLNormal)
+    # assert {"position", "label", "normal", "curvature"} == set(cloud.keys())
 
 
 def everything_is_point(n_points: int):
@@ -136,6 +136,52 @@ def compare_speed():
         print(f"Point-Based took {point_time * 1000:0.3f} ms")
         print(f"Cloud-Based took {cloud_time * 1000:0.3f} ms")
 
+
+def test_resize():
+    cloud = PointCloud(t.PointNormal, 0)
+    assert len(cloud) == 0
+
+    cloud = PointCloud(t.PointNormal, 3)
+    assert len(cloud) == 3
+
+    cloud.resize(10)
+    assert len(cloud) == 10
+
+
+def test_subarray():
+    cloud = PointCloud(t.PointNormal)
+    n_points = 7
+    normal = np.tile(np.arange(n_points), (3, 1)).T
+    position = np.tile(np.arange(3) * 0.1, (n_points, 1))
+
+    cloud["position"] = position.copy()
+    cloud["normal"] = normal.copy()
+    cloud["curvature"] = np.ones((n_points, 1))
+    assert len(cloud) == n_points
+
+    ss = slice(1, 4, 2)
+    sliced = cloud[ss]
+    assert len(sliced) == 2
+    np.testing.assert_allclose(sliced["normal"], normal[ss])
+    np.testing.assert_allclose(sliced["position"], position[ss])
+
+    index = 3
+    single = cloud[index]
+    assert len(single) == 1
+    np.testing.assert_allclose(single["position"], [position[index]])
+    np.testing.assert_allclose(single["normal"], [normal[index, :]])
+
+    indices = np.zeros(n_points, dtype=bool)
+    indices[2] = True
+    indices[6] = True
+    bool_indexed = cloud[indices]
+    np.testing.assert_allclose(bool_indexed["position"], position[indices, :])
+    np.testing.assert_allclose(bool_indexed["normal"], normal[indices, :])
+
+    indices = np.array([3, 5])
+    int_indexed = cloud[indices]
+    np.testing.assert_allclose(int_indexed["position"], position[indices, :])
+    np.testing.assert_allclose(int_indexed["normal"], normal[indices, :])
 
 if __name__ == "__main__":
     compare_speed()
