@@ -14,6 +14,8 @@ using InputArray2d = nb::ndarray<float, nb::ndim<2>>;
 
 // TODO: double check ownership - when setting and when returning
 // TODO: how to handle different datatypes (np / tensorflow?)
+// TODO: use array-view wherever needed (python-array) for speed
+
 template<typename T>
 inline nb::capsule delete_owner(T data){
   // Delete 'data' when the 'owner' capsule expires
@@ -40,7 +42,7 @@ enum PointType{
   PointXYZRGBNormal,
   PointXYZINormal,
   PointXYZLNormal,
-  GENERAL 
+  GENERAL // No restriction on properties
   // NUMBER_OF_POINTS // The number of enum-points for correct templatization
 };
 
@@ -202,16 +204,49 @@ class PointCloud
     PointCloud slice(nb::slice slice) const {
       auto size = this->get_size();
       const auto& [start, stop, step, new_size] = slice.compute(size);
+      std::vector<long int> indices(new_size); 
 
+      long int value = start;
+      for (auto it = 0; it < new_size; it++){
+        indices[it] = value;
+        value += step;
+      }
+      return this->get_subarray(indices);
+    }
+
+    PointCloud subarray_from_bool(nb::ndarray<bool, nb::ndim<1>> bool_indices) const {
+      if (bool_indices.shape(0) != this->get_size()){
+        std::cout << "Wrong indices size.\n";
+        throw 101;
+      }
+      
+      auto view = bool_indices.view();
+      size_t new_size = 0;
+      for (auto it = 0; it < view.shape(0); it++){
+        if (view(it))
+            new_size += 1;
+      }
+
+      std::vector<long int> indices(new_size); 
+      size_t new_it = 0;
+      for (auto it = 0; it < view.shape(0); it++){
+        if (view(it)){
+          indices[new_it] = it;
+          new_it++;
+        }
+      }
+      return this->get_subarray(indices);
+    }
+
+    template<typename T>
+    PointCloud get_subarray(T indices) const{
       auto new_cloud = PointCloud(_type);
       for (auto it = _data.begin(); it != _data.end(); ++it){
-        auto array = create_2d_array(new_size, it->second.shape(1));
-        size_t row = start;
-        for (auto row_new = 0; row_new < new_size; row_new++){
+        auto array = create_2d_array(indices.size(), it->second.shape(1));
+        for (auto row= 0; row < indices.size(); row++){
           for (auto cc = 0; cc < it->second.shape(1); cc++){
-            array(row_new, cc) = (float) it->second(row, cc);
+            array(row, cc) = (float) it->second(indices[row], cc);
           }
-          row += step;
         }
         new_cloud.set(it->first, array);
       }

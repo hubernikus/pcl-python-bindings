@@ -39,15 +39,23 @@ NB_MODULE(pcl_common_ext, m)
       "", cloud.get_size(), cloud.get_keys());
   })
   .def("__len__", &PointCloud::get_size)
-  .def("__getitem__", &PointCloud::get
-  )
-  // What is best naming for setting / getting array? Different array-types, too?
   .def("__getitem__", &PointCloud::slice)
   .def("__getitem__", [](const PointCloud& cloud, int index){
     return cloud.slice(nb::slice(index,index+1,1));
   })
-    // nb::rv_policy::reference_internal
+  .def("__getitem__", [](const PointCloud& cloud, nb::ndarray<int, nb::ndim<1>> int_indices){
+    auto view = int_indices.view();
+    std::vector<long int> indices(view.shape(0)); 
+    for (auto it = 0; it < view.shape(0); it++){
+      indices[it] = view(it);
+    }
+    return cloud.get_subarray(indices);
+  })
+  .def("__getitem__", &PointCloud::subarray_from_bool)
+  // TODO: What is best naming for the key-based setting / getting array?
+  // TODO: Should there be a method for differente array types ?
   .def("__setitem__", &PointCloud::set)
+  .def("__getitem__", &PointCloud::get)
   .def("keys", &PointCloud::get_keys)
   .def("resize", &PointCloud::resize)
   ;

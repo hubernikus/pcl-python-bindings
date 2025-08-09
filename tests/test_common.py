@@ -148,26 +148,40 @@ def test_resize():
     assert len(cloud) == 10
 
 
-def test_slice():
+def test_subarray():
     cloud = PointCloud(t.PointNormal)
     n_points = 7
-    cloud["position"] = np.tile(np.arange(n_points), (3, 1)).T
-    cloud["normal"] = np.tile(np.arange(3) * 0.1, (n_points, 1))
+    normal = np.tile(np.arange(n_points), (3, 1)).T
+    position = np.tile(np.arange(3) * 0.1, (n_points, 1))
+
+    cloud["position"] = position.copy()
+    cloud["normal"] = normal.copy()
     cloud["curvature"] = np.ones((n_points, 1))
     assert len(cloud) == n_points
 
     ss = slice(1, 4, 2)
     sliced = cloud[ss]
     assert len(sliced) == 2
-    np.testing.assert_allclose(sliced["normal"], cloud["normal"][ss])
-    np.testing.assert_allclose(sliced["position"], cloud["position"][ss])
+    np.testing.assert_allclose(sliced["normal"], normal[ss])
+    np.testing.assert_allclose(sliced["position"], position[ss])
 
     index = 3
     single = cloud[index]
     assert len(single) == 1
-    np.testing.assert_allclose(single["position"], [cloud["position"][index]])
-    np.testing.assert_allclose(single["normal"], [cloud["normal"][index, :]])
+    np.testing.assert_allclose(single["position"], [position[index]])
+    np.testing.assert_allclose(single["normal"], [normal[index, :]])
 
+    indices = np.zeros(n_points, dtype=bool)
+    indices[2] = True
+    indices[6] = True
+    bool_indexed = cloud[indices]
+    np.testing.assert_allclose(bool_indexed["position"], position[indices, :])
+    np.testing.assert_allclose(bool_indexed["normal"], normal[indices, :])
+
+    indices = np.array([3, 5])
+    int_indexed = cloud[indices]
+    np.testing.assert_allclose(int_indexed["position"], position[indices, :])
+    np.testing.assert_allclose(int_indexed["normal"], normal[indices, :])
 
 if __name__ == "__main__":
     compare_speed()
