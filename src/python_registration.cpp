@@ -18,15 +18,15 @@ NB_MODULE(pcl_registration_ext, m)
 {
   nb::class_<IterativeClosestPoint>(m, "IterativeClosestPoint")
   .def("__init__", [](
-    IterativeClosestPoint* icp, 
+    IterativeClosestPoint* self, 
     int max_iterations, 
     float ransac_iterations
     // float max_correspondance_distance
     ) { 
-      new (icp) IterativeClosestPoint(); 
-      icp->setMaximumIterations(max_iterations);
-      icp->setRANSACOutlierRejectionThreshold(ransac_iterations);
-      // icp->setMaxCorrespondenceDistance(max_correspondance_distance);
+      new (self) IterativeClosestPoint(); 
+      self->setMaximumIterations(max_iterations);
+      self->setRANSACOutlierRejectionThreshold(ransac_iterations);
+      // self->setMaxCorrespondenceDistance(max_correspondance_distance);
     }, 
     "max_iterations"_a  = 10, 
     "ransac_iterations"_a = 0
@@ -41,17 +41,17 @@ NB_MODULE(pcl_registration_ext, m)
     "Return the state of convergence after the last align run.")
   .def_prop_ro("final_transformation", &IterativeClosestPoint::getFinalTransformation, 
     "Get the final transformation matrix estimated by the registration method.")
-  .def("align", [](IterativeClosestPoint& icp, PointCloud& source, PointCloud& target){
+  .def("align", [](IterativeClosestPoint& self, PointCloud& source, PointCloud& target){
     auto pcl_source = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     source.position_to_cloud(*pcl_source);
-    icp.setInputSource(pcl_source);
+    self.setInputSource(pcl_source);
 
     auto pcl_target = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
     target.position_to_cloud(*pcl_target);
-    icp.setInputTarget(pcl_target);
+    self.setInputTarget(pcl_target);
 
     auto pcl_output = pcl::PointCloud<pcl::PointXYZ>();
-    icp.align(pcl_output);
+    self.align(pcl_output);
   }, 
   "source"_a, 
   "target"_a,
