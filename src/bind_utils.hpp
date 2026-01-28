@@ -42,15 +42,20 @@ enum PointType{
   PointXYZRGBNormal,
   PointXYZINormal,
   PointXYZLNormal,
+  FPFHSignature33,
   GENERAL // No restriction on properties
   // NUMBER_OF_POINTS // The number of enum-points for correct templatization
 };
 
-std::map<PointType, std::vector<std::string>> CLOUD_KEYS= {
-  // TODO: add remaining points
+std::map<PointType, std::vector<std::string>> CLOUD_KEYS = {
+  // TODO: add remaining point-types
   {PointType::PointXYZ, {"position"}},
   {PointType::PointXYZI, {"position", "intensity"}},
-  {PointType::PointNormal, {"position", "normal", "curvature"}}
+  {PointType::Normal, {"normal"}},
+  {PointType::PointXYZRGB, {"position", "RGB"}},
+  {PointType::PointNormal, {"position", "normal", "curvature"}},
+  // TODO: add size of histogram, eg. histogram-33
+  {PointType::FPFHSignature33, {"histogram"}}
 };
 
 class PointCloud
@@ -65,13 +70,19 @@ class PointCloud
       std::vector<std::string> keys = CLOUD_KEYS[type];
       for (auto it = keys.begin(); it != keys.end(); ++it){
         // TODO: varying width of arrays (?)
-        _data[*it] = create_2d_array(size, 3);
+        if (*it == "histogram")
+          _data[*it] = create_2d_array(size, 33);
+        else if (*it == "curvature")
+          _data[*it] = create_2d_array(size, 1);
+        else
+          _data[*it] = create_2d_array(size, 3);
         // _data["position"] = create_2d_array(3, size);
       }
     }
 
     bool size_consistent() const {
       /* Checks if the size of all arrays are consistent. */
+      // TODO: allow 0-size, e.g. for curvature (?)
       size_t size = _data.begin()->second.shape(0);
       for (auto it = _data.begin(); it != _data.end(); ++it){
         if (it->second.shape(0) != size){
@@ -125,11 +136,11 @@ class PointCloud
       auto rows = cloud.size(); 
 
       float* array = new float[rows * cols];
-      for (size_t i = 0; i < rows; ++i){
-        auto value = cloud[i];
-        array[i * cols]  = value.x;
-        array[i * cols + 1]  = value.y;
-        array[i * cols + 2]  = value.z;
+      for (size_t ii = 0; ii < rows; ++ii){
+        auto value = cloud[ii];
+        array[ii * cols]  = value.x;
+        array[ii * cols + 1]  = value.y;
+        array[ii * cols + 2]  = value.z;
       }
 
       // TODO: check owner / deletion
@@ -157,11 +168,11 @@ class PointCloud
       auto rows = cloud.size(); 
     
       float *_data = new float[rows * cols];
-      for (size_t i = 0; i < rows; ++i){
-        auto value = cloud[i];
-        _data[i * cols]  = value.normal_x;
-        _data[i * cols + 1]  = value.normal_y;
-        _data[i * cols + 2]  = value.normal_z;
+      for (size_t ii = 0; ii < rows; ++ii){
+        auto value = cloud[ii];
+        _data[ii * cols]  = value.normal_x;
+        _data[ii * cols + 1]  = value.normal_y;
+        _data[ii * cols + 2]  = value.normal_z;
       }
     
       auto ndarray = NumpyArray2d(_data, {rows, cols}, delete_owner(_data));
@@ -171,7 +182,7 @@ class PointCloud
     template<typename CloudT>
     void normal_to_cloud(CloudT &cloud){
       auto ndarray = get("normal");
-      cloud->resize(ndarray.shape(0));
+      cloud.resize(ndarray.shape(0));
     
       for (int ii = 0; ii < ndarray.shape(0); ii++){
         cloud[ii].normal_x = ndarray(ii, 0);
@@ -179,6 +190,36 @@ class PointCloud
         cloud[ii].normal_z = ndarray(ii, 2);
       }
     };
+
+    template<typename CloudT>
+    void histogram_from_cloud(CloudT &cloud){
+      size_t cols = this->get("histogram").shape(1);
+      auto rows = cloud.size(); 
+    
+      float *_data = new float[rows * cols];
+      for (size_t ii = 0; ii < rows; ++ii){
+        auto value = cloud[ii];
+        for (int jj = 0; jj < cols; ++jj){
+          _data[ii, jj] = cloud[ii].histogram[jj];
+        }
+      }
+    
+      auto ndarray = NumpyArray2d(_data, {rows, cols}, delete_owner(_data));
+      this->set("histogram", ndarray);
+    };
+
+    template<typename CloudT>
+    void histogram_to_cloud(CloudT &cloud){
+      auto ndarray = this->get("histogram");
+      cloud.resize(ndarray.shape(0));
+
+      for (int ii = 0; ii < ndarray.shape(0); ii++){
+        for (int jj = 0; jj < ndarray.shape(1); ++jj){
+          cloud[ii].histogram[jj] = ndarray(ii, jj);
+        }
+      }
+    };
+
 
     // TODO: Add additional setters / getters for remaining features
 
@@ -253,4 +294,10 @@ class PointCloud
       return new_cloud;
     }
 };
+
+// class PolygonMesh {
+//   public:
+//     PointCloud cloud;
+//     std::vector<::pcl::Vertices> polygons;
+// };
 
