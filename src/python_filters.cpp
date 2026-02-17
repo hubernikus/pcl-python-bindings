@@ -1,5 +1,4 @@
 #include <nanobind/nanobind.h>
-
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/shared_ptr.h>
 
@@ -8,83 +7,13 @@
 
 #include <pcl/filters/passthrough.h>
 
-#include "bind_utils.hpp"
-
 namespace nb = nanobind;
 using namespace nb::literals;
 
-template<typename PointT>
-pcl::PassThrough<PointT> create_pass_through(PointT&){
-  return pcl::PassThrough<PointT>();
-};
-
-class PassThrough{
-  public:
-    double min;
-    double max;
-    std::string field_name;
-    bool negative;
-
-  PassThrough() {} ;
-
-  PassThrough(
-      double min, 
-      double max, 
-      std::string field_name, 
-      bool negative) :
-        min(min), 
-        max(max),
-        field_name(field_name),
-        negative(negative) {}
-};
-
-
-// Without the position-restriction there is errors during the python import
-template<typename T> requires (!HasPosition<T>)
-PointCloud filter_return(T& cloud, const PassThrough& parameters){
-  std::cout << "Does not have position.\n"; throw 101;};
-template<typename T> requires HasPosition<T>
-PointCloud filter_return(T& cloud, const PassThrough& parameters){
-  auto filter = create_pass_through(cloud->front());
-  filter.setFilterLimits(parameters.min, parameters.max);
-  filter.setFilterFieldName(parameters.field_name);
-  filter.setNegative(parameters.negative);
-  filter.setInputCloud(cloud);
-
-  auto output = make_shared_of_type(*cloud);
-  filter.filter(*output);
-  return PointCloud(output);
-};
-
-
 NB_MODULE(pcl_filters_ext, m)
 {
-  nb::class_<PassThrough>(m, "PassThrough", 
-    "PassThrough passes points in a cloud based on constraints for one particular field of the point type. Iterates through the entire input once, automatically filtering non-finite points and the points outside the interval specified by setFilterLimits(), which applies only to the field specified by setFilterFieldName().")
-      .def(
-        nb::init<double, 
-        double, 
-        std::string, 
-        bool>(),  
-        "min"_a = 0, 
-        "max"_a = 0, 
-        "field_name"_a = "",
-        "negative"_a = false
-      )
-      .def_rw("min", &PassThrough::min)
-      .def_rw("max", &PassThrough::max)
-      .def_rw("field_name", &PassThrough::field_name,
-        "Provide the name of the field to be used for filtering data. In conjunction with setFilterLimits(), points having values outside this interval for this field will be discarded.")
-      .def_rw("negative", &PassThrough::negative,
-        "Set whether the regular conditions for points filtering should apply, or the inverted conditions.")
-      .def("filter", [](PassThrough& filter, PointCloud& cloud){
-        return std::visit([&filter](auto& arg){
-          return filter_return(arg, filter);
-        }, cloud.data);
-      }, "Calls the filtering method and returns the filtered dataset in output.") 
-      ;
-
-      
+  // PassThrough not implemented since numpy can be used at similar speed
+        
 #if 0 // abstract class
   nb::class_<pcl::Filter<pcl::PointXYZ>(m, "FilterXYZ")
       .def(nb::init<>())

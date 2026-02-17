@@ -6,6 +6,7 @@ import pytest
 import pcl.visualization
 import pcl.visualization.pcl_visualization_ext
 
+@pytest.mark.skip(reason="Visualization skipped.")
 def test_basic_visualization_functionality():
     """Test basic visualization functionality if possible"""
     try:

@@ -36,13 +36,14 @@ def test_icp_general_cloud():
     target["position"] = np.array([[1, 0, 0], [1, 10, 0], [1, 0, 10]])
 
     icp = IterativeClosestPoint(
-        inlier_threshold=0.05, max_iterations=10, ransac_iterations=0
+        # inlier_threshold=0.05,
+        max_iterations=10,
+        ransac_iterations=0,
     )
 
     icp.align(source=source, target=target)
-    assert icp.converged_
+    assert icp.converged
 
     expected_ = np.eye(4)
     expected_[0, 3] = 1.0
-    np.testing.assert_allclose(icp.final_transformation_, expected_, atol=1e-6)
-
+    np.testing.assert_allclose(icp.final_transformation, expected_, atol=1e-6)

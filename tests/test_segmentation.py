@@ -3,7 +3,9 @@ import numpy as np
 
 from pcl.common import PointcloudXYZ, PointXYZ, PointCloud
 from pcl.common import PointType as t
-from pcl.segmentation import EuclideanClusterExtractionXYZ, EuclideanClusterExtraction
+from pcl.segmentation import EuclideanClusterExtraction
+
+EuclideanClusterExtractionXYZ = EuclideanClusterExtraction
 
 def test_euclideanclusterextraction():
     cloud = PointcloudXYZ()
